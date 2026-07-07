@@ -477,7 +477,7 @@ let lp=0;
 const fill=document.getElementById('loaderFill'),ltxt=document.getElementById('loaderText');
 const li=setInterval(()=>{lp+=2;fill.style.width=lp+'%';ltxt.textContent=loaderMsgs[Math.min(Math.floor(lp/26),loaderMsgs.length-1)];if(lp>=100){clearInterval(li);setTimeout(()=>document.getElementById('loader').classList.add('hide'),300);}},28);
 
-/* 3D BACKGROUND */
+/* 3D BACKGROUND — Crystal cluster + particle vortex */
 const canvas=document.getElementById('bg-canvas');
 const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -494,80 +494,85 @@ const pl2=new THREE.PointLight(0xfacc15,2.5,50);pl2.position.set(-12,-7,4);scene
 const pl3=new THREE.PointLight(0x6366f1,2,45);pl3.position.set(0,10,-8);scene.add(pl3);
 const pl4=new THREE.PointLight(0x06b6d4,1.5,40);pl4.position.set(-10,0,10);scene.add(pl4);
 
+/* Starfield */
 const starGeo=new THREE.BufferGeometry();
 const STARS=3000,sp=new Float32Array(STARS*3);
 for(let i=0;i<STARS*3;i++)sp[i]=(Math.random()-.5)*220;
 starGeo.setAttribute('position',new THREE.BufferAttribute(sp,3));
 scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:0.055,transparent:true,opacity:0.6})));
 
-const NODE_COUNT=60;
-const nodePositions=[];
-const nodeGeo=new THREE.SphereGeometry(0.12,8,8);
-const nodeMats=[
-  new THREE.MeshBasicMaterial({color:0xf97316,transparent:true,opacity:0.9}),
-  new THREE.MeshBasicMaterial({color:0xfacc15,transparent:true,opacity:0.8}),
-  new THREE.MeshBasicMaterial({color:0x6366f1,transparent:true,opacity:0.85}),
-  new THREE.MeshBasicMaterial({color:0x06b6d4,transparent:true,opacity:0.8}),
+/* Floating crystal cluster — assorted wireframe polyhedra drifting & tumbling */
+const crystalGeos=[
+  new THREE.IcosahedronGeometry(1,0),
+  new THREE.OctahedronGeometry(1,0),
+  new THREE.TetrahedronGeometry(1,0),
+  new THREE.DodecahedronGeometry(0.9,0)
 ];
-const nodeGroup=new THREE.Group();
-for(let i=0;i<NODE_COUNT;i++){
-  const pos=new THREE.Vector3((Math.random()-.5)*40,(Math.random()-.5)*28,(Math.random()-.5)*22-4);
-  nodePositions.push(pos);
-  const m=new THREE.Mesh(nodeGeo,nodeMats[i%nodeMats.length]);
-  m.position.copy(pos);
-  m.userData={basePos:pos.clone(),t:Math.random()*Math.PI*2,speed:Math.random()*0.004+0.002,amp:Math.random()*0.6+0.2};
-  nodeGroup.add(m);
+const crystalColors=[0xf97316,0xfacc15,0x6366f1,0x06b6d4];
+const crystalGroup=new THREE.Group();
+const CRYSTAL_COUNT=26;
+for(let i=0;i<CRYSTAL_COUNT;i++){
+  const geo=crystalGeos[i%crystalGeos.length];
+  const col=crystalColors[i%crystalColors.length];
+  const scale=Math.random()*1.6+0.5;
+  const group=new THREE.Group();
+  const solid=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x140f22,metalness:0.85,roughness:0.15,transparent:true,opacity:0.35}));
+  const wire=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col,wireframe:true,transparent:true,opacity:0.55}));
+  group.add(solid,wire);
+  group.scale.setScalar(scale);
+  const basePos=new THREE.Vector3((Math.random()-.5)*46,(Math.random()-.5)*30,(Math.random()-.5)*26-4);
+  group.position.copy(basePos);
+  group.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+  group.userData={
+    basePos,
+    t:Math.random()*Math.PI*2,
+    amp:Math.random()*1.2+0.4,
+    driftSpeed:Math.random()*0.003+0.0015,
+    rotSpeedX:(Math.random()-.5)*0.006,
+    rotSpeedY:(Math.random()-.5)*0.006,
+    rotSpeedZ:(Math.random()-.5)*0.004
+  };
+  crystalGroup.add(group);
 }
-scene.add(nodeGroup);
+scene.add(crystalGroup);
 
-const edgeGroup=new THREE.Group();
-const MAX_DIST=9;
-for(let i=0;i<NODE_COUNT;i++){
-  for(let j=i+1;j<NODE_COUNT;j++){
-    const d=nodePositions[i].distanceTo(nodePositions[j]);
-    if(d<MAX_DIST){
-      const g=new THREE.BufferGeometry().setFromPoints([nodePositions[i].clone(),nodePositions[j].clone()]);
-      const opacity=Math.max(0,(1-d/MAX_DIST)*0.35);
-      edgeGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf97316,transparent:true,opacity})));
-    }
-  }
+/* Particle vortex — a swirling double-helix spiral of glowing points */
+const VORTEX_COUNT=900;
+const vortexGeo=new THREE.BufferGeometry();
+const vortexPos=new Float32Array(VORTEX_COUNT*3);
+const vortexData=[];
+for(let i=0;i<VORTEX_COUNT;i++){
+  const strand=i%2;
+  const progress=(i/VORTEX_COUNT)*Math.PI*10+strand*Math.PI;
+  const radius=3.4+Math.sin(progress*0.35)*1.1;
+  const y=(i/VORTEX_COUNT)*34-17;
+  vortexData.push({angle:progress,radius,y,speed:0.004+Math.random()*0.002});
+  vortexPos[i*3]=Math.cos(progress)*radius;
+  vortexPos[i*3+1]=y;
+  vortexPos[i*3+2]=Math.sin(progress)*radius;
 }
-scene.add(edgeGroup);
+vortexGeo.setAttribute('position',new THREE.BufferAttribute(vortexPos,3));
+const vortexMat=new THREE.PointsMaterial({color:0xf97316,size:0.09,transparent:true,opacity:0.75});
+const vortexPoints=new THREE.Points(vortexGeo,vortexMat);
+vortexPoints.position.set(-9,0,-6);
+scene.add(vortexPoints);
 
-const tkGeo=new THREE.TorusKnotGeometry(2.8,0.35,180,20,2,3);
-const tk=new THREE.Group();
-tk.add(new THREE.Mesh(tkGeo,new THREE.MeshStandardMaterial({color:0x1a1030,metalness:0.95,roughness:0.05,transparent:true,opacity:0.55})));
-tk.add(new THREE.Mesh(tkGeo,new THREE.MeshBasicMaterial({color:0xf97316,wireframe:true,transparent:true,opacity:0.08})));
-tk.position.set(7,0,-2);
-scene.add(tk);
-
+/* soft translucent rings orbiting the vortex */
 const ringGroup=new THREE.Group();
-[{r:4,tube:0.02,col:0xf97316,op:0.25,pos:[-5,3,-6],rx:0.6,ry:0.3},{r:5.5,tube:0.015,col:0x6366f1,op:0.18,pos:[8,-4,-8],rx:1.2,ry:0.8},{r:3,tube:0.025,col:0xfacc15,op:0.22,pos:[-8,-2,-3],rx:0.4,ry:1.1}].forEach(d=>{
+[{r:4.4,tube:0.02,col:0xf97316,op:0.22,rx:1.2,ry:0.2},{r:5.6,tube:0.015,col:0x6366f1,op:0.16,rx:0.5,ry:1.3},{r:3.4,tube:0.02,col:0xfacc15,op:0.2,rx:0.9,ry:0.7}].forEach(d=>{
   const mesh=new THREE.Mesh(new THREE.TorusGeometry(d.r,d.tube,4,80),new THREE.MeshBasicMaterial({color:d.col,transparent:true,opacity:d.op}));
-  mesh.position.set(...d.pos);mesh.rotation.x=d.rx;mesh.rotation.y=d.ry;
+  mesh.rotation.x=d.rx;mesh.rotation.y=d.ry;
   mesh.userData={speed:Math.random()*0.003+0.001};
   ringGroup.add(mesh);
 });
+ringGroup.position.copy(vortexPoints.position);
 scene.add(ringGroup);
-
-const pulseGeo=new THREE.SphereGeometry(0.08,6,6);
-const pulses=[];
-for(let i=0;i<12;i++){
-  const mesh=new THREE.Mesh(pulseGeo,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.9}));
-  mesh.userData={edgeIdx:Math.floor(Math.random()*edgeGroup.children.length),t:Math.random(),speed:Math.random()*0.008+0.004};
-  pulses.push(mesh);scene.add(mesh);
-}
 
 let mx=0,my=0,sy=0;
 document.addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5)*2;my=-(e.clientY/innerHeight-.5)*2;});
 window.addEventListener('scroll',()=>sy=scrollY);
 window.addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 
-const ribbonMat=new THREE.LineBasicMaterial({color:0xf97316,transparent:true,opacity:0.12});
-const rpts=[];for(let i=0;i<=120;i++){const a=(i/120)*Math.PI*2;rpts.push(new THREE.Vector3(Math.cos(a)*14,Math.sin(a*2)*3,Math.sin(a)*8-6));}
-scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rpts),ribbonMat));
-
-const _va=new THREE.Vector3(),_vb=new THREE.Vector3();
 let t=0;
 (function anim(){
   requestAnimationFrame(anim);t+=0.007;
@@ -578,21 +583,33 @@ let t=0;
   pl1.position.x=Math.sin(t*0.6)*14;pl1.position.y=Math.cos(t*0.4)*10;
   pl2.position.x=Math.cos(t*0.5)*13;pl2.position.y=Math.sin(t*0.7)*9;
   pl4.position.x=Math.sin(t*0.3+1)*12;pl4.position.z=Math.cos(t*0.35)*10;
-  nodeGroup.children.forEach(node=>{
-    node.userData.t+=node.userData.speed;
-    const{basePos,t:nt,amp}=node.userData;
-    node.position.set(basePos.x+Math.sin(nt)*amp,basePos.y+Math.cos(nt*0.7)*amp,basePos.z+Math.sin(nt*0.5)*amp*0.5);
+
+  crystalGroup.children.forEach(g=>{
+    const u=g.userData;
+    u.t+=u.driftSpeed;
+    g.position.set(
+      u.basePos.x+Math.sin(u.t)*u.amp,
+      u.basePos.y+Math.cos(u.t*0.8)*u.amp,
+      u.basePos.z+Math.sin(u.t*0.5)*u.amp*0.6
+    );
+    g.rotation.x+=u.rotSpeedX;
+    g.rotation.y+=u.rotSpeedY;
+    g.rotation.z+=u.rotSpeedZ;
   });
-  pulses.forEach(p=>{
-    p.userData.t+=p.userData.speed;
-    if(p.userData.t>1){p.userData.t=0;p.userData.edgeIdx=Math.floor(Math.random()*edgeGroup.children.length);}
-    const edge=edgeGroup.children[p.userData.edgeIdx];
-    if(edge){const pts=edge.geometry.getAttribute('position');_va.set(pts.getX(0),pts.getY(0),pts.getZ(0));_vb.set(pts.getX(1),pts.getY(1),pts.getZ(1));p.position.lerpVectors(_va,_vb,p.userData.t);}
-  });
-  tk.rotation.x=t*0.13;tk.rotation.y=t*0.19;
-  tk.position.x=7+Math.sin(t*0.35)*1.2;tk.position.y=Math.cos(t*0.28)*0.9;
+
+  const posAttr=vortexGeo.getAttribute('position');
+  for(let i=0;i<VORTEX_COUNT;i++){
+    const d=vortexData[i];
+    d.angle+=d.speed;
+    posAttr.setX(i,Math.cos(d.angle)*d.radius);
+    posAttr.setZ(i,Math.sin(d.angle)*d.radius);
+  }
+  posAttr.needsUpdate=true;
+  vortexPoints.rotation.y+=0.0015;
+
   ringGroup.children.forEach(r=>{r.rotation.x+=r.userData.speed;r.rotation.z+=r.userData.speed*0.6;});
-  ribbonMat.opacity=0.08+Math.sin(t*1.2)*0.06;
+  ringGroup.rotation.y+=0.001;
+
   renderer.render(scene,cam);
 })();
 
